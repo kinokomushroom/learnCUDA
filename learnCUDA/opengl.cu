@@ -5,6 +5,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <iostream>
+#include <cmath>
 
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
@@ -15,7 +16,6 @@
 #include "shader.h"
 #include "curved_geometry.cuh"
 
-
 GLFWwindow* initOpenGL();
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
@@ -24,12 +24,23 @@ unsigned int createQuadVAO();
 void renderTextureCUDA(cudaGraphicsResource_t textureResource, double* coords, int textureSize_x, int textureSize_y);
 
 
-const unsigned int SCREEN_WIDTH = 512;
-const unsigned int SCREEN_HEIGHT = 512;
-const unsigned int TEXTURE_SIZE = 512;
+const unsigned int SCREEN_WIDTH = 256;
+const unsigned int SCREEN_HEIGHT = 256;
+const unsigned int TEXTURE_SIZE = 256;
 
 double deltaTime = 0.0;
 double lastTime = 0.0;
+
+bool updateFrame = true;
+
+const double MOVE_DISTANCE = 0.1;
+int input[2] = { 0, 0 };
+double initialPosition[2] = { 1.0, 1.0 };
+double position[2];
+double basis[4]; // basis[a, b] = basis[2 * a + b];
+
+int displayMode = LINES;
+bool displayKeyPressed = false;
 
 
 int main()
@@ -67,6 +78,12 @@ int main()
 	size_t bytes = 2 * TEXTURE_SIZE * TEXTURE_SIZE * sizeof(double);
 	cudaMalloc(&coords, bytes);
 
+	// initialize position and basis
+	position[0] = initialPosition[0];
+	position[1] = initialPosition[1];
+	initializeBasis(position, basis);
+	//printArray(basis, 4, "basis");
+
 
 	// render loop
 	while (!glfwWindowShouldClose(window))
@@ -75,24 +92,37 @@ int main()
 		double currentTime = glfwGetTime();
 		deltaTime = currentTime - lastTime;
 		lastTime = currentTime;
-		if (floor(currentTime - deltaTime) < floor(currentTime))
-		{
-			std::cout << (int)floor(currentTime) << ": " << deltaTime << std::endl;
-		}
+		//if (floor(currentTime - deltaTime) < floor(currentTime))
+		//{
+		//	std::cout << (int)floor(currentTime) << ": " << deltaTime << std::endl;
+		//}
 
 		processInput(window);
 
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		// update coords
-		unsigned int blockSize = 16;
-		dim3 blockDimension(blockSize, blockSize);
-		dim3 gridDimension((int)ceil((float)TEXTURE_SIZE / blockSize), (int)ceil((float)TEXTURE_SIZE / blockSize));
-		calculateCoords<<<gridDimension, blockDimension>>>(coords, TEXTURE_SIZE, TEXTURE_SIZE, 5.0, 5.0);
+		if (updateFrame)
+		{
+			updateFrame = false;
 
-		// render texture with CUDA
-		renderTextureCUDA(textureResource, coords, TEXTURE_SIZE, TEXTURE_SIZE);
+			// measure time
+			double startTime = glfwGetTime();
+
+			// update coords
+			unsigned int blockSize = 16;
+			dim3 blockDimension(blockSize, blockSize);
+			dim3 gridDimension((int)ceil((float)TEXTURE_SIZE / blockSize), (int)ceil((float)TEXTURE_SIZE / blockSize));
+			calculateCoords<<<gridDimension, blockDimension>>>(coords, TEXTURE_SIZE, TEXTURE_SIZE, 4.0, 4.0, basis[0], basis[1], basis[2], basis[3], position[0], position[1]);
+			cudaDeviceSynchronize();
+
+			// render texture with CUDA
+			renderTextureCUDA(textureResource, coords, TEXTURE_SIZE, TEXTURE_SIZE);
+
+			// output elapsed time
+			double elapsedTime = glfwGetTime() - startTime;
+			//std::cout << elapsedTime << " sec" << std::endl;
+		}
 
 		// draw texture
 		shader.use();
@@ -146,9 +176,52 @@ void framebufferSizeCallback(GLFWwindow* window, int width, int height)
 
 void processInput(GLFWwindow* window)
 {
+	// handle window close
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 	{
 		glfwSetWindowShouldClose(window, true);
+	}
+
+	// change display mode
+	if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS)
+	{
+		if (!displayKeyPressed)
+		{
+			displayKeyPressed = true;
+			updateFrame = true;
+			displayMode = (displayMode + 1) % 2;
+			std::cout << "display mode changed!" << std::endl;
+		}
+	}
+	else
+	{
+		displayKeyPressed = false;
+	}
+
+	// handle movement input
+	input[0] = 0;
+	input[1] = 0;
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+	{
+		input[0] += 1;
+	}
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+	{
+		input[0] -= 1;
+	}
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+	{
+		input[1] += 1;
+	}
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+	{
+		input[1] -= 1;
+	}
+	if (input[0] != 0 || input[1] != 0) // if not zero, update position and basis
+	{
+		updateFrame = true;
+		updatePosition(position, basis, input, MOVE_DISTANCE);
+		//printArray(basis, 4, "basis");
 	}
 }
 
@@ -218,7 +291,8 @@ void renderTextureCUDA(cudaGraphicsResource_t textureResource, double* coords, i
 	unsigned int blockSize = 16;
 	dim3 blockDimension(blockSize, blockSize);
 	dim3 gridDimension((int)ceil((float)textureSize_x / blockSize), (int)ceil((float)textureSize_y / blockSize));
-	renderTextureKernel<<<gridDimension, blockDimension>>>(surfaceObject, coords, TEXTURE_SIZE, TEXTURE_SIZE);
+	renderTextureKernel<<<gridDimension, blockDimension>>>(surfaceObject, coords, TEXTURE_SIZE, TEXTURE_SIZE, displayMode);
+	cudaDeviceSynchronize();
 	// free
 	cudaDestroySurfaceObject(surfaceObject);
 	//cudaFreeArray(textureArray); // DO NOT FREE ARRAY!!
