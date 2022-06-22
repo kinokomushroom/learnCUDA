@@ -90,6 +90,7 @@ int main()
 		dim3 blockDimension(blockSize, blockSize);
 		dim3 gridDimension((int)ceil((float)TEXTURE_SIZE / blockSize), (int)ceil((float)TEXTURE_SIZE / blockSize));
 		calculateCoords<<<gridDimension, blockDimension>>>(coords, TEXTURE_SIZE, TEXTURE_SIZE, 5.0, 5.0);
+		cudaDeviceSynchronize();
 
 		// render texture with CUDA
 		renderTextureCUDA(textureResource, coords, TEXTURE_SIZE, TEXTURE_SIZE);
@@ -219,6 +220,7 @@ void renderTextureCUDA(cudaGraphicsResource_t textureResource, double* coords, i
 	dim3 blockDimension(blockSize, blockSize);
 	dim3 gridDimension((int)ceil((float)textureSize_x / blockSize), (int)ceil((float)textureSize_y / blockSize));
 	renderTextureKernel<<<gridDimension, blockDimension>>>(surfaceObject, coords, TEXTURE_SIZE, TEXTURE_SIZE);
+	cudaDeviceSynchronize();
 	// free
 	cudaDestroySurfaceObject(surfaceObject);
 	//cudaFreeArray(textureArray); // DO NOT FREE ARRAY!!
