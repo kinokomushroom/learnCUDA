@@ -8,7 +8,7 @@
 
 __device__ const double PI = 3.14159265358979323846;
 __device__ const double PIXEL_DISTANCE_STEP = 1.0; // proportional to pixel
-__device__ const double DISTANCE_STEP_PRECISION = 1.0; // makes distance step more precise near extreme coordinates
+__device__ const double DISTANCE_STEP_PRECISION = 0.0; // makes distance step more precise near extreme coordinates
 __device__ const double MAX_PRECISION = 5.0;
 __device__ const double DERIVATIVE_STEP = 0.001; // used when taking derivative of metric tensor
 
@@ -53,9 +53,47 @@ __device__ __host__ void torusMetric(double* metric, double x, double y) // http
 	metric[3] = smallRadius * smallRadius;
 }
 
+__device__ __host__ void euclideanMetric(double* metric, double x, double y)
+{
+	// xx component
+	metric[0] = 1.0;
+	// xy component
+	metric[1] = 0.0;
+	// yx component
+	metric[2] = metric[1];
+	// yy component
+	metric[3] = 1.0;
+}
+
+__device__ __host__ void minkowskiMetric(double* metric, double x, double y)
+{
+	// xx component
+	metric[0] = -1.0;
+	// xy component
+	metric[1] = 0.0;
+	// yx component
+	metric[2] = metric[1];
+	// yy component
+	metric[3] = 1.0;
+}
+
+__device__ __host__ void hyperbolicMetric(double* metric, double x, double y) // https://en.wikipedia.org/wiki/Poincar%C3%A9_metric
+{
+	double divisor = y * y;
+	double scale = 4.0;
+	// xx component
+	metric[0] = scale / divisor;
+	// xy component
+	metric[1] = 0.0;
+	// yx component
+	metric[2] = metric[1];
+	// yy component
+	metric[3] = scale / divisor;
+}
+
 __device__ __host__ void poincareMetric(double* metric, double x, double y) // https://math.stackexchange.com/questions/1292707/comparing-metric-tensors-of-the-poincare-and-the-klein-disk-models-of-hyperbolic
 {
-	double divisor = (1.0 - x * x - y * y);
+	double divisor = 1.0 - x * x - y * y;
 	double scale = 4.0;
 	// xx component
 	metric[0] = scale / divisor;
@@ -69,8 +107,8 @@ __device__ __host__ void poincareMetric(double* metric, double x, double y) // h
 
 __device__ __host__ void kleinMetric(double* metric, double x, double y)
 {
-	double divisor = (1.0 - x * x - y * y);
-	double scale = 16.0;
+	double divisor = 1.0 - x * x - y * y;
+	double scale = 4.0;
 	// xx component
 	metric[0] = scale / divisor + (x * x) / (divisor * divisor);
 	// xy component
@@ -81,42 +119,18 @@ __device__ __host__ void kleinMetric(double* metric, double x, double y)
 	metric[3] = scale / divisor + (y * y) / (divisor * divisor);
 }
 
-__device__ __host__ void euclideanMetric(double* metric, double x, double y)
-{
-	// xx component
-	metric[0] = 1.0;
-	// xy component
-	metric[1] = 0.0;
-	// yx component
-	metric[2] = metric[1];
-	// yy component
-	metric[3] = 1.0;
-}
-
-__device__ __host__ void minkowskiMetric(double* metric, double x, double y) 
-{
-	// xx component
-	metric[0] = -1.0;
-	// xy component
-	metric[1] = 0.0;
-	// yx component
-	metric[2] = metric[1];
-	// yy component
-	metric[3] = 1.0;
-}
-
 __device__ __host__ void schwarzschildMetric(double* metric, double x, double y)
 {
-	double schwarzschildRadius = 1.0;
+	double schwarzschildRadius = 4.0;
 
 	// xx component (space)
-	metric[0] = -1.0 / (1.0 - schwarzschildRadius / (x + 1));
+	metric[0] = -1.0 / (1.0 - schwarzschildRadius / (x + schwarzschildRadius));
 	// xy component
 	metric[1] = 0.0;
 	// yx component
 	metric[2] = metric[1];
 	// yy component (time)
-	metric[3] = (1.0 - schwarzschildRadius / (x + 1));
+	metric[3] = (1.0 - schwarzschildRadius / (x + schwarzschildRadius));
 }
 // ---------------- metrics ----------------
 
@@ -157,13 +171,14 @@ __device__ __host__ double dotProduct(double* vector_a, double* vector_b, double
 
 __device__ __host__ void calculateMetric(double* metric, double x, double y) // metric[a, b] = metric[2 * a + b]
 {
-	//sphereMetric(metric, x, y);
-	//torusMetric(metric, x, y);
-	//poincareMetric(metric, x, y);
-	//kleinMetric(metric, x, y);
 	//euclideanMetric(metric, x, y);
 	//minkowskiMetric(metric, x, y);
-	schwarzschildMetric(metric, x, y);
+	//sphereMetric(metric, x, y);
+	//torusMetric(metric, x, y);
+	hyperbolicMetric(metric, x, y);
+	//poincareMetric(metric, x, y);
+	//kleinMetric(metric, x, y);
+	//schwarzschildMetric(metric, x, y);
 }
 
 
