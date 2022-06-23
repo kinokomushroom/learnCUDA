@@ -119,6 +119,10 @@ int main()
 			// render texture with CUDA
 			renderTextureCUDA(textureResource, coords, TEXTURE_SIZE, TEXTURE_SIZE);
 
+			// output position
+			//std::cout << "x: " << position[0] << ", y: " << position[1] << std::endl;
+			//printArray(basis, 4, "basis");
+
 			// output elapsed time
 			double elapsedTime = glfwGetTime() - startTime;
 			//std::cout << elapsedTime << " sec" << std::endl;
@@ -189,8 +193,8 @@ void processInput(GLFWwindow* window)
 		{
 			displayKeyPressed = true;
 			updateFrame = true;
-			displayMode = (displayMode + 1) % 2;
-			std::cout << "display mode changed!" << std::endl;
+			displayMode = (displayMode + 1) % 3;
+			//std::cout << "display mode changed!" << std::endl;
 		}
 	}
 	else

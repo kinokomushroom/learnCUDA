@@ -9,11 +9,13 @@
 __device__ const double PI = 3.14159265358979323846;
 __device__ const double PIXEL_DISTANCE_STEP = 1.0; // proportional to pixel
 __device__ const double DISTANCE_STEP_PRECISION = 1.0; // makes distance step more precise near extreme coordinates
-__device__ const double DERIVATIVE_STEP = 0.01; // used when taking derivative of metric tensor
+__device__ const double MAX_PRECISION = 5.0;
+__device__ const double DERIVATIVE_STEP = 0.001; // used when taking derivative of metric tensor
 
 __device__ enum DisplayMode {
 	LINES,
-	COLOR_LINES
+	COLOR_LINES,
+	REPEATED_COLOR_LINES,
 };
 
 
@@ -105,16 +107,16 @@ __device__ __host__ void minkowskiMetric(double* metric, double x, double y)
 
 __device__ __host__ void schwarzschildMetric(double* metric, double x, double y)
 {
-	double schwarzschildRadius = 0.5;
+	double schwarzschildRadius = 1.0;
 
 	// xx component (space)
-	metric[0] = -1.0 / (1.0 - schwarzschildRadius / x);
+	metric[0] = -1.0 / (1.0 - schwarzschildRadius / (x + 1));
 	// xy component
 	metric[1] = 0.0;
 	// yx component
 	metric[2] = metric[1];
 	// yy component (time)
-	metric[3] = (1.0 - schwarzschildRadius / x);
+	metric[3] = (1.0 - schwarzschildRadius / (x + 1));
 }
 // ---------------- metrics ----------------
 
@@ -155,13 +157,13 @@ __device__ __host__ double dotProduct(double* vector_a, double* vector_b, double
 
 __device__ __host__ void calculateMetric(double* metric, double x, double y) // metric[a, b] = metric[2 * a + b]
 {
-	sphereMetric(metric, x, y);
+	//sphereMetric(metric, x, y);
 	//torusMetric(metric, x, y);
 	//poincareMetric(metric, x, y);
 	//kleinMetric(metric, x, y);
 	//euclideanMetric(metric, x, y);
 	//minkowskiMetric(metric, x, y);
-	//schwarzschildMetric(metric, x, y);
+	schwarzschildMetric(metric, x, y);
 }
 
 
@@ -269,7 +271,7 @@ __device__ __host__ void updateVelocity(double* velocity, double* position, doub
 
 	// update deltaTime
 	double acceleration[2] = { (velocity[0] - originalVelocity[0]) / deltaTime, (velocity[1] - originalVelocity[1]) / deltaTime };
-	double accelerationLog = log(acceleration[0] * acceleration[0] + acceleration[1] * acceleration[1] + 1);
+	double accelerationLog = min(log(acceleration[0] * acceleration[0] + acceleration[1] * acceleration[1] + 1), MAX_PRECISION);
 	deltaTime = baseDeltaTime / (1.0 + DISTANCE_STEP_PRECISION * accelerationLog);
 }
 
@@ -370,8 +372,18 @@ __host__ void fixBasis(double* position, double* basis)
 
 	// fix y basis in the x direction so they become orthogonal
 	double basis_yFix = dotProduct(basis_x, basis_y, metric);
-	basis_y[0] += -basis_yFix * basis_x[0];
-	basis_y[1] += -basis_yFix * basis_x[1];
+	double testBasis_y[2] = { basis_y[0] - basis_yFix * basis_x[0], basis_y[1] - basis_yFix * basis_x[1]};
+	double basis_yFixResult = dotProduct(basis_x, testBasis_y, metric);
+	if (abs(basis_yFixResult) < abs(basis_yFix)) // check if fix direction was valid
+	{
+		basis_y[0] += -basis_yFix * basis_x[0];
+		basis_y[1] += -basis_yFix * basis_x[1];
+	}
+	else
+	{
+		basis_y[0] += basis_yFix * basis_x[0];
+		basis_y[1] += basis_yFix * basis_x[1];
+	}
 
 	// normalize y basis
 	double basis_yLength = sqrt(abs(dotProduct(basis_y, basis_y, metric)));
@@ -477,7 +489,11 @@ __global__ void renderTextureKernel(cudaSurfaceObject_t surfaceObject, double* c
 		}
 		else if (displayMode == COLOR_LINES)
 		{
-			value = make_float4(fmax((float)coord_x, line), fmax((float)coord_y, line), line, 1.0); // coordinates with lines
+			value = make_float4(max(coord_x, line), max(coord_y, line), line, 1.0); // coordinates with lines
+		}
+		else if (displayMode == REPEATED_COLOR_LINES)
+		{
+			value = make_float4(max(coord_x - floor(coord_x), line), max(coord_y - floor(coord_y), line), line, 1.0); // coordinates with lines
 		}
 
 		if (sqrt(normalziedCoord_x * normalziedCoord_x + normalziedCoord_y * normalziedCoord_y) < 0.03) // draw center position
