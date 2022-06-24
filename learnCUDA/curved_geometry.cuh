@@ -7,9 +7,6 @@
 
 
 __device__ const double PI = 3.14159265358979323846;
-__device__ const double PIXEL_DISTANCE_STEP = 1.0; // proportional to pixel
-__device__ const double DISTANCE_STEP_PRECISION = 0.0; // makes distance step more precise near extreme coordinates
-__device__ const double MAX_PRECISION = 5.0;
 __device__ const double DERIVATIVE_STEP = 0.001; // used when taking derivative of metric tensor
 
 __device__ enum DisplayMode {
@@ -135,6 +132,31 @@ __device__ __host__ void schwarzschildMetric(double* metric, double x, double y)
 // ---------------- metrics ----------------
 
 
+typedef void(*metricFunction_t)(double* metric, double x, double y);
+const int METRIC_FUNCTION_COUNT = 8;
+__device__ const metricFunction_t metricFunctions[] =
+{
+	euclideanMetric,
+	minkowskiMetric,
+	sphereMetric,
+	torusMetric,
+	hyperbolicMetric,
+	poincareMetric,
+	kleinMetric,
+	schwarzschildMetric,
+};
+const std::string metricNames[] =
+{
+	"Euclidean",
+	"Minkowski",
+	"Sphere",
+	"Torus",
+	"Hyperbola",
+	"Poincare",
+	"Klein",
+	"Schwarzschild",
+};
+
 
 void printArray(double* doubleArray, int length, std::string name)
 {
@@ -168,17 +190,18 @@ __device__ __host__ double dotProduct(double* vector_a, double* vector_b, double
 	return result;
 }
 
-
-__device__ __host__ void calculateMetric(double* metric, double x, double y) // metric[a, b] = metric[2 * a + b]
+__device__ __host__ void calculateMetric(double* metric, double x, double y, int metricFunctionIndex) // metric[a, b] = metric[2 * a + b]
 {
 	//euclideanMetric(metric, x, y);
 	//minkowskiMetric(metric, x, y);
 	//sphereMetric(metric, x, y);
 	//torusMetric(metric, x, y);
-	hyperbolicMetric(metric, x, y);
+	//hyperbolicMetric(metric, x, y);
 	//poincareMetric(metric, x, y);
 	//kleinMetric(metric, x, y);
 	//schwarzschildMetric(metric, x, y);
+
+	(*(metricFunctions[metricFunctionIndex]))(metric, x, y);
 }
 
 
@@ -196,16 +219,16 @@ __device__ __host__ void calculateMetricInverse(double* metricInverse, double* m
 }
 
 
-__device__ __host__ void calculateMetricJacobian(double* metricJacobian, double* position) // metricJacibian[a, b, k] = metricJacobian[4 * k + 2 * a + b]
+__device__ __host__ void calculateMetricJacobian(double* metricJacobian, double* position, int metricFunctionIndex) // metricJacibian[a, b, k] = metricJacobian[4 * k + 2 * a + b]
 {
 	double metric_x_plus[4];
 	double metric_x_minus[4];
 	double metric_y_plus[4];
 	double metric_y_minus[4];
-	calculateMetric(metric_x_plus, position[0] + DERIVATIVE_STEP, position[1]);
-	calculateMetric(metric_x_minus, position[0] - DERIVATIVE_STEP, position[1]);
-	calculateMetric(metric_y_plus, position[0], position[1] + DERIVATIVE_STEP);
-	calculateMetric(metric_y_minus, position[0], position[1] - DERIVATIVE_STEP);
+	calculateMetric(metric_x_plus, position[0] + DERIVATIVE_STEP, position[1], metricFunctionIndex);
+	calculateMetric(metric_x_minus, position[0] - DERIVATIVE_STEP, position[1], metricFunctionIndex);
+	calculateMetric(metric_y_plus, position[0], position[1] + DERIVATIVE_STEP, metricFunctionIndex);
+	calculateMetric(metric_y_minus, position[0], position[1] - DERIVATIVE_STEP, metricFunctionIndex);
 
 	double doubleStep = 2 * DERIVATIVE_STEP;
 	// d(g_xx) / dx
@@ -227,14 +250,14 @@ __device__ __host__ void calculateMetricJacobian(double* metricJacobian, double*
 }
 
 
-__device__ __host__ void calculateChristoffel(double* christoffel, double* position) // christoffel[i, a, b] = christoffel[4 * i + 2 * a + b]
+__device__ __host__ void calculateChristoffel(double* christoffel, double* position, int metricFunctionIndex) // christoffel[i, a, b] = christoffel[4 * i + 2 * a + b]
 {
 	double metric[4];
-	calculateMetric(metric, position[0], position[1]);
+	calculateMetric(metric, position[0], position[1], metricFunctionIndex);
 	double metricInverse[4];
 	calculateMetricInverse(metricInverse, metric);
 	double metricJacobian[8];
-	calculateMetricJacobian(metricJacobian, position);
+	calculateMetricJacobian(metricJacobian, position, metricFunctionIndex);
 
 	// christoffel[i, a, b] = 0.5 * metricInverse[j, i] * (metricJacobian[j, a, b] + metricJacobian[b, j, a] - metricJacobian[a, b, j])
 	for (int i = 0; i < 2; i++)
@@ -255,10 +278,10 @@ __device__ __host__ void calculateChristoffel(double* christoffel, double* posit
 }
 
 
-__device__ __host__ void parallelTransport(double* targetVector, double* movementVector, double* position)
+__device__ __host__ void parallelTransport(double* targetVector, double* movementVector, double* position, int metricFunctionIndex)
 {
 	double christoffel[8];
-	calculateChristoffel(christoffel, position);
+	calculateChristoffel(christoffel, position, metricFunctionIndex);
 
 	double updatedTargetVector[2] = { targetVector[0], targetVector[1]};
 	for (int i = 0; i < 2; i++)
@@ -277,21 +300,21 @@ __device__ __host__ void parallelTransport(double* targetVector, double* movemen
 }
 
 
-__device__ __host__ void updateVelocity(double* velocity, double* position, double differentiationStep, double& deltaTime, double baseDeltaTime)
+__device__ __host__ void updateVelocity(double* velocity, double* position, double differentiationStep, double& deltaTime, double baseDeltaTime, double distanceStepPrecision, double maxPrecision, int metricFunctionIndex)
 {
 	// parallel transport velocity by deltaTime * velocity
 	double movementVector[2] = { deltaTime * velocity[0], deltaTime * velocity[1] };
 	double originalVelocity[2] = { velocity[0], velocity[1] };
-	parallelTransport(velocity, movementVector, position);
+	parallelTransport(velocity, movementVector, position, metricFunctionIndex);
 
 	// update deltaTime
 	double acceleration[2] = { (velocity[0] - originalVelocity[0]) / deltaTime, (velocity[1] - originalVelocity[1]) / deltaTime };
-	double accelerationLog = min(log(acceleration[0] * acceleration[0] + acceleration[1] * acceleration[1] + 1), MAX_PRECISION);
-	deltaTime = baseDeltaTime / (1.0 + DISTANCE_STEP_PRECISION * accelerationLog);
+	double accelerationLog = min(log(acceleration[0] * acceleration[0] + acceleration[1] * acceleration[1] + 1), maxPrecision);
+	deltaTime = baseDeltaTime / (1.0 + distanceStepPrecision * accelerationLog);
 }
 
 
-__global__ void calculateCoords(double* coords, int textureSize_x, int textureSize_y, double scale_x, double scale_y, double basis_xx, double basis_yx, double basis_xy, double basis_yy, double position_x, double position_y)
+__global__ void calculateCoords(double* coords, int textureSize_x, int textureSize_y, double scale_x, double scale_y, double basis_xx, double basis_yx, double basis_xy, double basis_yy, double position_x, double position_y, double pixelDistanceStep, double distanceStepPrecision, double maxPrecision, int metricFunctionIndex)
 {
 	int textureCoord_x = blockIdx.x * blockDim.x + threadIdx.x;
 	int textureCoord_y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -314,7 +337,7 @@ __global__ void calculateCoords(double* coords, int textureSize_x, int textureSi
 		flatDirection[0] = flatCoord_x / flatDistance;
 		flatDirection[1] = flatCoord_y / flatDistance;
 
-		double baseDeltaDistance = flatDistance / textureDistance * PIXEL_DISTANCE_STEP; // also d_tau
+		double baseDeltaDistance = flatDistance / textureDistance * pixelDistanceStep; // also d_tau
 		double deltaDistance = baseDeltaDistance;
 		double velocity[2];
 		velocity[0] = flatDirection[0] * basis_xx + flatDirection[1] * basis_yx;
@@ -337,7 +360,7 @@ __global__ void calculateCoords(double* coords, int textureSize_x, int textureSi
 			curvedCoord[1] += deltaDistance * velocity[1];
 			travelledDistance += deltaDistance;
 
-			updateVelocity(velocity, oldCurvedCoord, 0.01, deltaDistance, baseDeltaDistance);
+			updateVelocity(velocity, oldCurvedCoord, 0.01, deltaDistance, baseDeltaDistance, distanceStepPrecision, maxPrecision, metricFunctionIndex);
 		}
 		double remainingDistance = flatDistance - (travelledDistance);
 		curvedCoord[0] += remainingDistance * velocity[0];
@@ -349,34 +372,11 @@ __global__ void calculateCoords(double* coords, int textureSize_x, int textureSi
 }
 
 
-// initialize basis with the x basis vector aligned with coordinate x direction
-__host__ void initializeBasis(double* position, double* basis)
-{
-	double metric[4];
-	calculateMetric(metric, position[0], position[1]);
-	double coordBasis_xLength = sqrt(abs(metric[0]));
-	double coordBasis_yLength = sqrt(abs(metric[3]));
-	double coordBasisAngle = acos(metric[1] / (coordBasis_xLength * coordBasis_yLength));
-
-	double forwardTransform[4]; // forwardTransformation[a, b] = forwardTransformation[2 * a + b], transformation from orthonormal basis to coordinate basis
-	forwardTransform[0] = coordBasis_xLength;
-	forwardTransform[2] = 0.0;
-	forwardTransform[1] = coordBasis_yLength * cos(coordBasisAngle);
-	forwardTransform[3] = coordBasis_yLength * sin(coordBasisAngle);
-
-	double determinant = forwardTransform[0] * forwardTransform[3] - forwardTransform[1] * forwardTransform[2];
-	basis[0] = forwardTransform[3] / determinant;
-	basis[1] = -forwardTransform[1] / determinant;
-	basis[2] = -forwardTransform[2] / determinant;
-	basis[3] = forwardTransform[0] / determinant;
-}
-
-
 // fix slight errors from parallel transport and make basis orthonormal
-__host__ void fixBasis(double* position, double* basis)
+__host__ void fixBasis(double* position, double* basis, int metricFunctionIndex)
 {
 	double metric[4];
-	calculateMetric(metric, position[0], position[1]);
+	calculateMetric(metric, position[0], position[1], metricFunctionIndex);
 
 	double basis_x[2] = { basis[0], basis[2] };
 	double basis_y[2] = { basis[1], basis[3] };
@@ -387,7 +387,7 @@ __host__ void fixBasis(double* position, double* basis)
 
 	// fix y basis in the x direction so they become orthogonal
 	double basis_yFix = dotProduct(basis_x, basis_y, metric);
-	double testBasis_y[2] = { basis_y[0] - basis_yFix * basis_x[0], basis_y[1] - basis_yFix * basis_x[1]};
+	double testBasis_y[2] = { basis_y[0] - basis_yFix * basis_x[0], basis_y[1] - basis_yFix * basis_x[1] };
 	double basis_yFixResult = dotProduct(basis_x, testBasis_y, metric);
 	if (abs(basis_yFixResult) < abs(basis_yFix)) // check if fix direction was valid
 	{
@@ -416,7 +416,37 @@ __host__ void fixBasis(double* position, double* basis)
 }
 
 
-__host__ void updatePosition(double* position, double* basis, int* input, double moveDistance)
+// initialize basis with the x basis vector aligned with coordinate x direction
+__host__ void initializeBasis(double* position, double* basis, int metricFunctionIndex)
+{
+	//double metric[4];
+	//calculateMetric(metric, position[0], position[1], metricFunctionIndex);
+	//double coordBasis_xLength = sqrt(abs(metric[0]));
+	//double coordBasis_yLength = sqrt(abs(metric[3]));
+	//double coordBasisAngle = acos(metric[1] / (coordBasis_xLength * coordBasis_yLength));
+
+	//double forwardTransform[4]; // forwardTransformation[a, b] = forwardTransformation[2 * a + b], transformation from orthonormal basis to coordinate basis
+	//forwardTransform[0] = coordBasis_xLength;
+	//forwardTransform[2] = 0.0;
+	//forwardTransform[1] = coordBasis_yLength * cos(coordBasisAngle);
+	//forwardTransform[3] = coordBasis_yLength * sin(coordBasisAngle);
+
+	//double determinant = forwardTransform[0] * forwardTransform[3] - forwardTransform[1] * forwardTransform[2];
+	//basis[0] = forwardTransform[3] / determinant;
+	//basis[1] = -forwardTransform[1] / determinant;
+	//basis[2] = -forwardTransform[2] / determinant;
+	//basis[3] = forwardTransform[0] / determinant;
+
+	basis[0] = 1;
+	basis[1] = 0;
+	basis[2] = 0;
+	basis[3] = 1;
+
+	fixBasis(position, basis, metricFunctionIndex);
+}
+
+
+__host__ void updatePosition(double* position, double* basis, int* input, double moveDistance, int inputRotation, double rotationAngle, int metricFunctionIndex)
 {
 	// create movement vector from input 
 	double inputMagnitude = sqrt(input[0] * input[0] + input[1] * input[1]);
@@ -440,14 +470,34 @@ __host__ void updatePosition(double* position, double* basis, int* input, double
 	// parallel transport basis vectors
 	double basis_x[2] = { basis[0], basis[2] };
 	double basis_y[2] = { basis[1], basis[3] };
-	parallelTransport(basis_x, movementVector, oldPositon);
-	parallelTransport(basis_y, movementVector, oldPositon);
+	parallelTransport(basis_x, movementVector, oldPositon, metricFunctionIndex);
+	parallelTransport(basis_y, movementVector, oldPositon, metricFunctionIndex);
 	basis[0] = basis_x[0];
 	basis[2] = basis_x[1];
 	basis[1] = basis_y[0];
 	basis[3] = basis_y[1];
 
-	fixBasis(position, basis);
+	// rotate basis
+	double metric[4];
+	calculateMetric(metric, position[0], position[1], metricFunctionIndex);
+	double localMetric[4] = { dotProduct(basis_x, basis_x, metric), dotProduct(basis_x, basis_y, metric), dotProduct(basis_y, basis_x, metric), dotProduct(basis_y, basis_y, metric) };
+	//printArray(localMetric, 4, "local metric");
+	double rotationComponents[4]; // rotationComponents[a, b] = rotationComponents[2 * a + b]
+	rotationComponents[2] = 1; // PHI[1, 0] = 1
+	rotationComponents[1] = (localMetric[3] * (localMetric[1] - localMetric[0] * localMetric[3])) / (localMetric[0] * (localMetric[0] * localMetric[3] - localMetric[2])) * rotationComponents[2]; // PHI[0, 1] = (g[1, 1] * (g[0, 1] - g[0, 0] * g[1, 1])) / (g[0, 0] * (g[0, 0] * g[1, 1] - g[1, 0])) * PHI[1, 0]
+	rotationComponents[0] = -localMetric[1] / localMetric[0] * rotationComponents[2]; // PHI[0, 0] = -g[0, 1] / g[0, 0] * PHI[1, 0]
+	rotationComponents[3] = -localMetric[2] / localMetric[3] * rotationComponents[1]; // PHI[1, 1] = -g[1, 0] / g[1, 1] * PHI[0, 1]
+	//printArray(rotationComponents, 4, "rot components");
+	double rotationVector_x[2] = { rotationComponents[0] * basis[0] + rotationComponents[2] * basis[1], rotationComponents[0] * basis[2] + rotationComponents[2] * basis[3] };
+	double rotationVector_y[2] = { rotationComponents[1] * basis[0] + rotationComponents[3] * basis[1], rotationComponents[1] * basis[2] + rotationComponents[3] * basis[3] };
+	//printArray(rotationVector_x, 2, "rot x");
+	//printArray(rotationVector_y, 2, "rot y");
+	basis[0] += inputRotation * rotationAngle * rotationVector_x[0];
+	basis[2] += inputRotation * rotationAngle * rotationVector_x[1];
+	basis[1] += inputRotation * rotationAngle * rotationVector_y[0];
+	basis[3] += inputRotation * rotationAngle * rotationVector_y[1];
+
+	fixBasis(position, basis, metricFunctionIndex);
 }
 
 
