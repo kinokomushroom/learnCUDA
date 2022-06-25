@@ -133,7 +133,7 @@ __device__ __host__ void schwarzschildMetric(double* metric, double x, double y)
 
 
 typedef void(*metricFunction_t)(double* metric, double x, double y);
-const int METRIC_FUNCTION_COUNT = 8;
+const int METRIC_FUNCTION_COUNT = 7;
 __device__ const metricFunction_t metricFunctions[] =
 {
 	euclideanMetric,
@@ -142,19 +142,28 @@ __device__ const metricFunction_t metricFunctions[] =
 	torusMetric,
 	hyperbolicMetric,
 	poincareMetric,
-	kleinMetric,
 	schwarzschildMetric,
 };
-const std::string metricNames[] =
+
+struct MetricInfo
 {
-	"Euclidean",
-	"Minkowski",
-	"Sphere",
-	"Torus",
-	"Hyperbola",
-	"Poincare",
-	"Klein",
-	"Schwarzschild",
+	std::string name;
+	std::string description;
+	MetricInfo(char* _name, std::string gxx, std::string gxy, std::string gyy)
+	{
+		name = _name;
+		description = "g_xx = " + gxx + "\ng_xy = " + gxy + "\ng_yy = " + gyy;
+	}
+};
+const MetricInfo metricInfos[] =
+{
+	MetricInfo("Euclidean", "1", "0", "1"),
+	MetricInfo("Minkowski", "-1", "0", "1"),
+	MetricInfo("Sphere", "r^2", "0", "r^2 * sin(x)"),
+	MetricInfo("Torus", "(R + r * cos(y))^2", "0", "r^2"),
+	MetricInfo("Hyperbola", "r / y^2", "0", "r / y^2"),
+	MetricInfo("Poincare", "r / (1 - x^2 - y^2)", "0", "r / (1 - x^2 - y^2)"),
+	MetricInfo("Schwarzschild", "-1 / (1 - r / (x))", "0", "1 - r / (x)"),
 };
 
 

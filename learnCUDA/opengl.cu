@@ -155,13 +155,12 @@ int main()
 				changeDisplayMode();
 			}
 
-
-			if (ImGui::BeginCombo("Metric", metricNames[METRIC_FUNCTION_INDEX].c_str()))
+			if (ImGui::BeginCombo("Metric", metricInfos[METRIC_FUNCTION_INDEX].name.c_str()))
 			{
 				for (int index = 0; index < METRIC_FUNCTION_COUNT; index++)
 				{
 					bool isSelected = (index == METRIC_FUNCTION_INDEX);
-					if (ImGui::Selectable(metricNames[index].c_str(), isSelected))
+					if (ImGui::Selectable(metricInfos[index].name.c_str(), isSelected))
 					{
 						METRIC_FUNCTION_INDEX = index;
 						changeMetricType();
@@ -169,6 +168,7 @@ int main()
 				}
 				ImGui::EndCombo();
 			}
+			ImGui::Text(metricInfos[METRIC_FUNCTION_INDEX].description.c_str());
 
 			ImGui::SliderFloat("Speed", &SPEED_ImGui, 0.01f, 0.5f, "%.2f", ImGuiSliderFlags_None);
 			ImGui::SliderFloat("Angular Speed", &ANGULAR_ImGui, 0.005f, 0.25f, " % .3f", ImGuiSliderFlags_None);
