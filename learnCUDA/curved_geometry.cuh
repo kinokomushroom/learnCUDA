@@ -129,11 +129,27 @@ __device__ __host__ void schwarzschildMetric(double* metric, double x, double y)
 	// yy component (time)
 	metric[3] = (1.0 - schwarzschildRadius / (x + schwarzschildRadius));
 }
+
+__device__ __host__ void wormholeMetric(double* metric, double x, double y)
+{
+	double radius = 3.0;
+	// xx component
+	metric[0] = 1.0;
+	// xy component
+	metric[1] = 0.0;
+	// yx component
+	metric[2] = metric[1];
+	// yy component
+	double inner = radius - cos(x);
+	double outer = abs(x) - 0.5 * PI + radius;
+	int condition = abs(x) < 0.5 * PI;
+	metric[3] = (inner * inner) * condition + (outer * outer) * (1 - condition);
+}
 // ---------------- metrics ----------------
 
 
 typedef void(*metricFunction_t)(double* metric, double x, double y);
-const int METRIC_FUNCTION_COUNT = 7;
+const int METRIC_FUNCTION_COUNT = 8;
 __device__ const metricFunction_t metricFunctions[] =
 {
 	euclideanMetric,
@@ -143,6 +159,7 @@ __device__ const metricFunction_t metricFunctions[] =
 	hyperbolicMetric,
 	poincareMetric,
 	schwarzschildMetric,
+	wormholeMetric,
 };
 
 struct MetricInfo
@@ -164,6 +181,7 @@ const MetricInfo metricInfos[] =
 	MetricInfo("Hyperbola", "r / y^2", "0", "r / y^2"),
 	MetricInfo("Poincare", "r / (1 - x^2 - y^2)", "0", "r / (1 - x^2 - y^2)"),
 	MetricInfo("Schwarzschild", "-1 / (1 - r / (x))", "0", "1 - r / (x)"),
+	MetricInfo("Wormhole", "1", "0", "\nif x < PI / 2: (r - cos(x))^2\nelse: (|x| - PI / 2 + r)^2"),
 };
 
 
@@ -201,15 +219,6 @@ __device__ __host__ double dotProduct(double* vector_a, double* vector_b, double
 
 __device__ __host__ void calculateMetric(double* metric, double x, double y, int metricFunctionIndex) // metric[a, b] = metric[2 * a + b]
 {
-	//euclideanMetric(metric, x, y);
-	//minkowskiMetric(metric, x, y);
-	//sphereMetric(metric, x, y);
-	//torusMetric(metric, x, y);
-	//hyperbolicMetric(metric, x, y);
-	//poincareMetric(metric, x, y);
-	//kleinMetric(metric, x, y);
-	//schwarzschildMetric(metric, x, y);
-
 	(*(metricFunctions[metricFunctionIndex]))(metric, x, y);
 }
 
