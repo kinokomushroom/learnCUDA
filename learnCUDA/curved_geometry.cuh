@@ -118,7 +118,7 @@ __device__ __host__ void kleinMetric(double* metric, double x, double y)
 
 __device__ __host__ void schwarzschildMetric(double* metric, double x, double y)
 {
-	double schwarzschildRadius = 4.0;
+	double schwarzschildRadius = 4.0; // x = 0 is event horizon, and x = -schwarzSchildRadius is singularity
 
 	// xx component (space)
 	metric[0] = -1.0 / (1.0 - schwarzschildRadius / (x + schwarzschildRadius));
