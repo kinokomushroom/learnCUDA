@@ -218,7 +218,7 @@ const MetricInfo metricInfos[] =
 {
 	MetricInfo("Euclidean", "1", "0", "1", 0, 0, NONE, NONE, 1, 1, 0, 0),
 	MetricInfo("Minkowski", "-1", "0", "1", 0, 0, NONE, NONE, 1, 1, 0, 0),
-	MetricInfo("Sphere", "r^2", "0", "r^2 * sin(x)", PI / 2, 0, MIRROR, CYCLIC, 4 / PI, 4 / PI, 4, 8),
+	MetricInfo("Sphere", "r^2", "0", "(r * sin(x))^2", PI / 2, 0, MIRROR, CYCLIC, 4 / PI, 4 / PI, 4, 8),
 	MetricInfo("Torus", "(R + r * cos(y))^2", "0", "r^2", 0, 0, CYCLIC, CYCLIC, 4 / PI, 2 / PI, 8, 4),
 	MetricInfo("Hyperboloid", "r / y^2", "0", "r / y^2", 0, 1, NONE, NONE, 1, 1, 0, 0),
 	MetricInfo("Poincare Disk", "r / (1 - x^2 - y^2)", "0", "r / (1 - x^2 - y^2)", 1, 1, NONE, NONE, 1, 1, 0, 0),
