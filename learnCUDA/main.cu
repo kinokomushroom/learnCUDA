@@ -257,7 +257,7 @@ GLFWwindow* initOpenGL()
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
 	// create a window
-	GLFWwindow* window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "LearnOpenGL", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Curved Geometry", NULL, NULL);
 	if (window == NULL)
 	{
 		std::cout << "GLFW ERROR: Failed to create GLFW window" << std::endl;

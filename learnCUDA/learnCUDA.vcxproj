@@ -11,11 +11,8 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="kernel.cu" />
-  </ItemGroup>
-  <ItemGroup>
     <ClCompile Include="glad.c" />
-    <CudaCompile Include="opengl.cu">
+    <CudaCompile Include="main.cu">
       <FileType>CppCode</FileType>
     </CudaCompile>
     <ClCompile Include="imgui\imgui.cpp" />
