@@ -20,7 +20,6 @@ __device__ enum DisplayMode {
 __device__ __host__ void sphereMetric(double* metric, double x, double y)
 {
 	double radius = 1.0;
-	double halfCircumference = 4.0;
 
 	// xx component
 	metric[0] = radius * radius;
@@ -29,7 +28,7 @@ __device__ __host__ void sphereMetric(double* metric, double x, double y)
 	// yx component
 	metric[2] = metric[1];
 	// yy component
-	double sin_x = sin(x * PI / halfCircumference);
+	double sin_x = sin(x);
 	metric[3] = radius * radius * sin_x * sin_x;
 }
 
@@ -37,10 +36,9 @@ __device__ __host__ void torusMetric(double* metric, double x, double y) // http
 {
 	double largeRadius = 3.0;
 	double smallRadius = 1.0;
-	double halfCircumference = 2.0;
 
 	// xx component
-	double cos_y = cos(y * PI / halfCircumference);
+	double cos_y = cos(y);
 	metric[0] = (largeRadius + smallRadius * cos_y) * (largeRadius + smallRadius * cos_y);
 	// xy component
 	metric[1] = 0.0;
@@ -102,20 +100,6 @@ __device__ __host__ void poincareMetric(double* metric, double x, double y) // h
 	metric[3] = scale / divisor;
 }
 
-__device__ __host__ void kleinMetric(double* metric, double x, double y)
-{
-	double divisor = 1.0 - x * x - y * y;
-	double scale = 4.0;
-	// xx component
-	metric[0] = scale / divisor + (x * x) / (divisor * divisor);
-	// xy component
-	metric[1] = (x * y) / (divisor * divisor);
-	// yx component
-	metric[2] = metric[1];
-	// yy component
-	metric[3] = scale / divisor + (y * y) / (divisor * divisor);
-}
-
 __device__ __host__ void schwarzschildMetric(double* metric, double x, double y) // https://en.wikipedia.org/wiki/Metric_tensor
 {
 	double schwarzschildRadius = 4.0; // x = schwarzschildRadius is event horizon, and x = 0 is singularity
@@ -158,6 +142,39 @@ __device__ __host__ void wormholeMetric(double* metric, double x, double y) // h
 }
 // ---------------- metrics ----------------
 
+__device__ enum CoordMode
+{
+	NONE,
+	CYCLIC,
+	MIRROR,
+};
+__device__ __host__ double convertCoords(double value, int mode, double scale, double cycle)
+{
+	double newValue = value * scale;
+	if (mode == NONE)
+	{
+		return newValue;
+	}
+	if (mode == CYCLIC)
+	{
+		newValue = newValue - floor(newValue / cycle) * cycle;
+		if (newValue > cycle / 2)
+		{
+			newValue -= cycle;
+		}
+		return newValue;
+	}
+	if (mode == MIRROR)
+	{
+		double doubleCycle = 2 * cycle;
+		newValue = newValue - floor(newValue / doubleCycle) * doubleCycle;
+		if (newValue > cycle)
+		{
+			newValue = -newValue + 2 * cycle;
+		}
+		return newValue;
+	}
+}
 
 typedef void(*metricFunction_t)(double* metric, double x, double y);
 const int METRIC_FUNCTION_COUNT = 9;
@@ -178,26 +195,36 @@ struct MetricInfo
 {
 	std::string name;
 	std::string description;
-	int initialPosition[2];
-	MetricInfo(char* _name, std::string gxx, std::string gxy, std::string gyy, int initialPosition_0, int initialPosition_1)
+	double initialPosition[2];
+	bool isCoordCyclic[2];
+	int coordMode[2];
+	double coordScale[2];
+	double coordCycle[2];
+	MetricInfo(char* _name, std::string gxx, std::string gxy, std::string gyy, double initialPosition_0, double initialPosition_1, int coordMode_0, int coordMode_1, double coordScale_0, double coordScale_1, double coordCycle_0, double coordCycle_1)
 	{
 		name = _name;
 		description = "g_xx = " + gxx + "\ng_xy = " + gxy + "\ng_yy = " + gyy;
 		initialPosition[0] = initialPosition_0;
 		initialPosition[1] = initialPosition_1;
+		coordMode[0] = coordMode_0;
+		coordMode[1] = coordMode_1;
+		coordScale[0] = coordScale_0;
+		coordScale[1] = coordScale_1;
+		coordCycle[0] = coordCycle_0;
+		coordCycle[1] = coordCycle_1;
 	}
 };
 const MetricInfo metricInfos[] =
 {
-	MetricInfo("Euclidean", "1", "0", "1", 0, 0),
-	MetricInfo("Minkowski", "-1", "0", "1", 0, 0),
-	MetricInfo("Sphere", "r^2", "0", "r^2 * sin(x)", 2, 0),
-	MetricInfo("Torus", "(R + r * cos(y))^2", "0", "r^2", 0, 0),
-	MetricInfo("Hyperbola", "r / y^2", "0", "r / y^2", 0, 1),
-	MetricInfo("Poincare Disk", "r / (1 - x^2 - y^2)", "0", "r / (1 - x^2 - y^2)", 1, 1),
-	MetricInfo("Schwarzschild", "-1 / (1 - r / x)", "0", "1 - r / x", 6, 0),
-	MetricInfo("Schwarzschild (Spatial)", "-1 / (1 - r / (x))", "0", "-x^2", 3, 0),
-	MetricInfo("Wormhole", "1", "0", "x^2 + r^2", 2, 0),
+	MetricInfo("Euclidean", "1", "0", "1", 0, 0, NONE, NONE, 1, 1, 0, 0),
+	MetricInfo("Minkowski", "-1", "0", "1", 0, 0, NONE, NONE, 1, 1, 0, 0),
+	MetricInfo("Sphere", "r^2", "0", "r^2 * sin(x)", PI / 2, 0, MIRROR, CYCLIC, 4 / PI, 4 / PI, 4, 8),
+	MetricInfo("Torus", "(R + r * cos(y))^2", "0", "r^2", 0, 0, CYCLIC, CYCLIC, 4 / PI, 2 / PI, 8, 4),
+	MetricInfo("Hyperbola", "r / y^2", "0", "r / y^2", 0, 1, NONE, NONE, 1, 1, 0, 0),
+	MetricInfo("Poincare Disk", "r / (1 - x^2 - y^2)", "0", "r / (1 - x^2 - y^2)", 1, 1, NONE, NONE, 1, 1, 0, 0),
+	MetricInfo("Schwarzschild", "-1 / (1 - r / x)", "0", "1 - r / x", 6, 0, NONE, NONE, 1, 1, 0, 0),
+	MetricInfo("Schwarzschild (Spatial)", "-1 / (1 - r / (x))", "0", "-x^2", 3, 0, NONE, CYCLIC, 1, 4 / PI, 0, 8),
+	MetricInfo("Wormhole", "1", "0", "x^2 + r^2", 2, 0, NONE, CYCLIC, 1, 4 / PI, 0, 8),
 };
 
 
@@ -453,24 +480,6 @@ __host__ void fixBasis(double* position, double* basis, int metricFunctionIndex)
 // initialize basis with the x basis vector aligned with coordinate x direction
 __host__ void initializeBasis(double* position, double* basis, int metricFunctionIndex)
 {
-	//double metric[4];
-	//calculateMetric(metric, position[0], position[1], metricFunctionIndex);
-	//double coordBasis_xLength = sqrt(abs(metric[0]));
-	//double coordBasis_yLength = sqrt(abs(metric[3]));
-	//double coordBasisAngle = acos(metric[1] / (coordBasis_xLength * coordBasis_yLength));
-
-	//double forwardTransform[4]; // forwardTransformation[a, b] = forwardTransformation[2 * a + b], transformation from orthonormal basis to coordinate basis
-	//forwardTransform[0] = coordBasis_xLength;
-	//forwardTransform[2] = 0.0;
-	//forwardTransform[1] = coordBasis_yLength * cos(coordBasisAngle);
-	//forwardTransform[3] = coordBasis_yLength * sin(coordBasisAngle);
-
-	//double determinant = forwardTransform[0] * forwardTransform[3] - forwardTransform[1] * forwardTransform[2];
-	//basis[0] = forwardTransform[3] / determinant;
-	//basis[1] = -forwardTransform[1] / determinant;
-	//basis[2] = -forwardTransform[2] / determinant;
-	//basis[3] = forwardTransform[0] / determinant;
-
 	basis[0] = 1;
 	basis[1] = 0;
 	basis[2] = 0;
@@ -549,7 +558,7 @@ __device__ void writeValue(cudaSurfaceObject_t surfaceObject, float4 value, int 
 }
 
 
-__global__ void renderTextureKernel(cudaSurfaceObject_t surfaceObject, double* coords, int textureSize_x, int textureSize_y, int displayMode)
+__global__ void renderTextureKernel(cudaSurfaceObject_t surfaceObject, double* coords, int textureSize_x, int textureSize_y, int displayMode, double position_0, double position_1, double initialPosition_0, double initialPosition_1, int metricFunctionIndex, double pointSize, double scale, int coordMode_0, int coordMode_1, double coordScale_0, double coordScale_1, double coordCycle_0, double coordCycle_1)
 {
 	int textureCoord_x = blockIdx.x * blockDim.x + threadIdx.x;
 	int textureCoord_y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -561,8 +570,8 @@ __global__ void renderTextureKernel(cudaSurfaceObject_t surfaceObject, double* c
 
 	if (index_x != -1 && index_y != -1) // make sure the indices are valid
 	{
-		double coord_x = coords[index_x];
-		double coord_y = coords[index_y];
+		double coord_x = convertCoords(coords[index_x], coordMode_0, coordScale_0, coordCycle_0);
+		double coord_y = convertCoords(coords[index_y], coordMode_1, coordScale_1, coordCycle_1);
 
 		bool isOnLine = false;
 
@@ -570,13 +579,17 @@ __global__ void renderTextureKernel(cudaSurfaceObject_t surfaceObject, double* c
 		int index_right_y = getIndex(textureSize_x, textureSize_y, textureCoord_x + 1, textureCoord_y, 1);
 		int index_up_x = getIndex(textureSize_x, textureSize_y, textureCoord_x, textureCoord_y + 1, 0);
 		int index_up_y = getIndex(textureSize_x, textureSize_y, textureCoord_x, textureCoord_y + 1, 1);
+		double coord_right_x = convertCoords(coords[index_right_x], coordMode_0, coordScale_0, coordCycle_0);
+		double coord_right_y = convertCoords(coords[index_right_y], coordMode_1, coordScale_1, coordCycle_1);
+		double coord_up_x = convertCoords(coords[index_up_x], coordMode_0, coordScale_0, coordCycle_0);
+		double coord_up_y = convertCoords(coords[index_up_y], coordMode_1, coordScale_1, coordCycle_1);
 		if (index_right_x != -1)
 		{
-			isOnLine = isOnLine || floor(coord_x) != floor(coords[index_right_x]) || floor(coord_y) != floor(coords[index_right_y]);
+			isOnLine = isOnLine || floor(coord_x) != floor(coord_right_x) || floor(coord_y) != floor(coord_right_y);
 		}
 		if (index_up_x != -1)
 		{
-			isOnLine = isOnLine || floor(coord_x) != floor(coords[index_up_x]) || floor(coord_y) != floor(coords[index_up_y]);
+			isOnLine = isOnLine || floor(coord_x) != floor(coord_up_x) || floor(coord_y) != floor(coord_up_y);
 		}
 
 		float line = (float)isOnLine;
@@ -595,7 +608,22 @@ __global__ void renderTextureKernel(cudaSurfaceObject_t surfaceObject, double* c
 			value = make_float4(max(coord_x - floor(coord_x), line), max(coord_y - floor(coord_y), line), line, 1.0); // coordinates with lines
 		}
 
-		if (sqrt(normalziedCoord_x * normalziedCoord_x + normalziedCoord_y * normalziedCoord_y) < 0.03) // draw center position
+		// render circle in initial viewer position
+		double initialMetric[4];
+		calculateMetric(initialMetric, initialPosition_0, initialPosition_1, metricFunctionIndex);
+		double initialViewerDirection[2] = { convertCoords(coords[index_x] - initialPosition_0, coordMode_0, 1, coordCycle_0 / coordScale_0), convertCoords(coords[index_y] - initialPosition_1, coordMode_1, 1, coordCycle_1 / coordScale_1) };
+		double initialViewerDistance = sqrt(abs(dotProduct(initialViewerDirection, initialViewerDirection, initialMetric)));
+		if (initialViewerDistance <= pointSize * scale) // draw center position
+		{
+			value = make_float4(1.0, 0.0, 1.0, 1.0);
+		}
+
+		// render circle in viewer position
+		double metric[4];
+		calculateMetric(metric, position_0, position_1, metricFunctionIndex);
+		double viewerDirection[2] = { convertCoords(coords[index_x] - position_0, coordMode_0, 1, coordCycle_0 / coordScale_0), convertCoords(coords[index_y] - position_1, coordMode_1, 1, coordCycle_1 / coordScale_1) };
+		double viewerDistance = sqrt(abs(dotProduct(viewerDirection, viewerDirection, metric)));
+		if (viewerDistance <= pointSize * scale) // draw center position
 		{
 			value = make_float4(0.0, 1.0, 1.0, 1.0);
 		}

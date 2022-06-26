@@ -62,6 +62,7 @@ bool displayImGuiWindow = true;
 
 int METRIC_FUNCTION_INDEX = 2;
 double MAGNIFICATION = 4.0;
+double POINT_SIZE = 0.05;
 double PIXEL_DISTANCE_STEP = 1.0; // proportional to pixel
 double DISTANCE_STEP_PRECISION = 1.0; // makes distance step more precise near extreme coordinates
 double MAX_PRECISION = 5.0;
@@ -142,13 +143,17 @@ int main()
 			float SPEED_ImGui = (float)MOVE_DISTANCE;
 			float ANGULAR_ImGui = (float)ROTATION_ANGLE;
 			float SCALE_ImGui = (float)MAGNIFICATION;
+			float POINT_SIZE_ImGui = (float)POINT_SIZE;
 			float STEP_ImGui = (float)PIXEL_DISTANCE_STEP;
 			float PRECISION_ImGui = (float)DISTANCE_STEP_PRECISION;
 			float MAX_PRECISION_ImGui = (float)MAX_PRECISION;
 
 			ImGui::Begin("Controls", &displayImGuiWindow);
 			ImGui::Text("%.2f frames/s", 1.0 / recentDeltaTime);
-			ImGui::Text("x: %.3f, y: %.3f, angle: %.3f", position[0], position[1], rotation);
+
+			double position_0_fixed = convertCoords(position[0], metricInfos[METRIC_FUNCTION_INDEX].coordMode[0], metricInfos[METRIC_FUNCTION_INDEX].coordScale[0], metricInfos[METRIC_FUNCTION_INDEX].coordCycle[0]);
+			double position_1_fixed = convertCoords(position[1], metricInfos[METRIC_FUNCTION_INDEX].coordMode[1], metricInfos[METRIC_FUNCTION_INDEX].coordScale[1], metricInfos[METRIC_FUNCTION_INDEX].coordCycle[1]);
+			ImGui::Text("x: %.3f, y: %.3f, angle: %.3f", position_0_fixed, position_1_fixed, rotation);
 
 			if (ImGui::Button("Change Display Mode"))
 			{
@@ -172,19 +177,21 @@ int main()
 
 			ImGui::SliderFloat("Speed", &SPEED_ImGui, 0.01f, 0.5f, "%.2f", ImGuiSliderFlags_None);
 			ImGui::SliderFloat("Angular Speed", &ANGULAR_ImGui, 0.005f, 0.25f, " % .3f", ImGuiSliderFlags_None);
-			ImGui::SliderFloat("Scale", &SCALE_ImGui, 0.01f, 16.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+			ImGui::SliderFloat("Scale", &SCALE_ImGui, 0.01f, 32.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+			ImGui::SliderFloat("Point Size", &POINT_SIZE_ImGui, 0.001f, 0.2f, "%.3f", ImGuiSliderFlags_None);
 			ImGui::SliderFloat("Step", &STEP_ImGui, 0.1f, 10.0f, "%.1f", ImGuiSliderFlags_None);
 			ImGui::SliderFloat("Precision", &PRECISION_ImGui, 0.0f, 10.0f, "%.1f", ImGuiSliderFlags_None);
 			ImGui::SliderFloat("Max Precision", &MAX_PRECISION_ImGui, 0.0f, 100.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
 			ImGui::End();
 
-			if (SPEED_ImGui != (float)MOVE_DISTANCE || ANGULAR_ImGui != (float)ROTATION_ANGLE || SCALE_ImGui != (float)MAGNIFICATION || STEP_ImGui != (float)PIXEL_DISTANCE_STEP || PRECISION_ImGui != (float)DISTANCE_STEP_PRECISION || MAX_PRECISION_ImGui != (float)MAX_PRECISION)
+			if (SPEED_ImGui != (float)MOVE_DISTANCE || ANGULAR_ImGui != (float)ROTATION_ANGLE || SCALE_ImGui != (float)MAGNIFICATION || POINT_SIZE_ImGui != POINT_SIZE || STEP_ImGui != (float)PIXEL_DISTANCE_STEP || PRECISION_ImGui != (float)DISTANCE_STEP_PRECISION || MAX_PRECISION_ImGui != (float)MAX_PRECISION)
 			{
 				updateFrame = true;
 
 				MOVE_DISTANCE = SPEED_ImGui;
 				ROTATION_ANGLE = ANGULAR_ImGui;
 				MAGNIFICATION = SCALE_ImGui;
+				POINT_SIZE = POINT_SIZE_ImGui;
 				PIXEL_DISTANCE_STEP = STEP_ImGui;
 				DISTANCE_STEP_PRECISION = PRECISION_ImGui;
 				MAX_PRECISION = MAX_PRECISION_ImGui;
@@ -297,8 +304,7 @@ void initializePositionBasis()
 {
 	position[0] = metricInfos[METRIC_FUNCTION_INDEX].initialPosition[0];
 	position[1] = metricInfos[METRIC_FUNCTION_INDEX].initialPosition[1];
-	//position[0] = initialPosition[0];
-	//position[1] = initialPosition[1];
+	rotation = 0;
 	initializeBasis(position, basis, METRIC_FUNCTION_INDEX);
 	//printArray(basis, 4, "basis");
 }
@@ -467,7 +473,7 @@ void renderTextureCUDA(cudaGraphicsResource_t textureResource, double* coords, i
 	unsigned int blockSize = 16;
 	dim3 blockDimension(blockSize, blockSize);
 	dim3 gridDimension((int)ceil((float)textureSize_x / blockSize), (int)ceil((float)textureSize_y / blockSize));
-	renderTextureKernel<<<gridDimension, blockDimension>>>(surfaceObject, coords, TEXTURE_SIZE, TEXTURE_SIZE, displayMode);
+	renderTextureKernel<<<gridDimension, blockDimension>>>(surfaceObject, coords, TEXTURE_SIZE, TEXTURE_SIZE, displayMode, position[0], position[1], metricInfos[METRIC_FUNCTION_INDEX].initialPosition[0], metricInfos[METRIC_FUNCTION_INDEX].initialPosition[1], METRIC_FUNCTION_INDEX, POINT_SIZE, MAGNIFICATION, metricInfos[METRIC_FUNCTION_INDEX].coordMode[0], metricInfos[METRIC_FUNCTION_INDEX].coordMode[1], metricInfos[METRIC_FUNCTION_INDEX].coordScale[0], metricInfos[METRIC_FUNCTION_INDEX].coordScale[1], metricInfos[METRIC_FUNCTION_INDEX].coordCycle[0], metricInfos[METRIC_FUNCTION_INDEX].coordCycle[1]);
 	cudaDeviceSynchronize();
 	// free
 	cudaDestroySurfaceObject(surfaceObject);
