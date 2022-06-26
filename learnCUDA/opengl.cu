@@ -26,7 +26,7 @@ void glfwErrorCallback(int error, const char* description);
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 void initializePositionBasis();
 void changeDisplayMode();
-void changeMetricType();
+void changeMetricType(bool increment = false);
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 void processInput(GLFWwindow* window);
 unsigned int createTexture(int textureSize_x, int textureSize_y);
@@ -149,15 +149,27 @@ int main()
 			ImGui::Begin("Controls", &displayImGuiWindow);
 			ImGui::Text("%.2f frames/s", 1.0 / recentDeltaTime);
 			ImGui::Text("x: %.3f, y: %.3f, angle: %.3f", position[0], position[1], rotation);
+
 			if (ImGui::Button("Change Display Mode"))
 			{
 				changeDisplayMode();
 			}
-			ImGui::Text("Metric Type: %s", metricNames[METRIC_FUNCTION_INDEX].c_str());
-			if (ImGui::Button("Change Metric Type"))
+
+			if (ImGui::BeginCombo("Metric", metricInfos[METRIC_FUNCTION_INDEX].name.c_str()))
 			{
-				changeMetricType();
+				for (int index = 0; index < METRIC_FUNCTION_COUNT; index++)
+				{
+					bool isSelected = (index == METRIC_FUNCTION_INDEX);
+					if (ImGui::Selectable(metricInfos[index].name.c_str(), isSelected))
+					{
+						METRIC_FUNCTION_INDEX = index;
+						changeMetricType();
+					}
+				}
+				ImGui::EndCombo();
 			}
+			ImGui::Text(metricInfos[METRIC_FUNCTION_INDEX].description.c_str());
+
 			ImGui::SliderFloat("Speed", &SPEED_ImGui, 0.01f, 0.5f, "%.2f", ImGuiSliderFlags_None);
 			ImGui::SliderFloat("Angular Speed", &ANGULAR_ImGui, 0.005f, 0.25f, " % .3f", ImGuiSliderFlags_None);
 			ImGui::SliderFloat("Scale", &SCALE_ImGui, 0.01f, 16.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
@@ -298,10 +310,13 @@ void changeDisplayMode()
 }
 
 
-void changeMetricType()
+void changeMetricType(bool increment)
 {
 	updateFrame = true;
-	METRIC_FUNCTION_INDEX = (METRIC_FUNCTION_INDEX + 1) % METRIC_FUNCTION_COUNT;
+	if (increment)
+	{
+		METRIC_FUNCTION_INDEX = (METRIC_FUNCTION_INDEX + 1) % METRIC_FUNCTION_COUNT;
+	}
 	initializePositionBasis();
 }
 
@@ -324,7 +339,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 	// change metric function number
 	if (key == GLFW_KEY_M && action == GLFW_PRESS)
 	{
-		changeMetricType();
+		changeMetricType(true);
 	}
 }
 
