@@ -72,7 +72,7 @@ __device__ __host__ void minkowskiMetric(double* metric, double x, double y)
 	metric[3] = 1.0;
 }
 
-__device__ __host__ void hyperbolicMetric(double* metric, double x, double y) // https://en.wikipedia.org/wiki/Poincar%C3%A9_metric
+__device__ __host__ void hyperboloidMetric(double* metric, double x, double y) // https://en.wikipedia.org/wiki/Poincar%C3%A9_metric
 {
 	double divisor = y * y;
 	double scale = 4.0;
@@ -184,7 +184,7 @@ __device__ const metricFunction_t metricFunctions[] =
 	minkowskiMetric,
 	sphereMetric,
 	torusMetric,
-	hyperbolicMetric,
+	hyperboloidMetric,
 	poincareMetric,
 	schwarzschildMetric,
 	schwarzschildSpatialMetric,
@@ -220,7 +220,7 @@ const MetricInfo metricInfos[] =
 	MetricInfo("Minkowski", "-1", "0", "1", 0, 0, NONE, NONE, 1, 1, 0, 0),
 	MetricInfo("Sphere", "r^2", "0", "r^2 * sin(x)", PI / 2, 0, MIRROR, CYCLIC, 4 / PI, 4 / PI, 4, 8),
 	MetricInfo("Torus", "(R + r * cos(y))^2", "0", "r^2", 0, 0, CYCLIC, CYCLIC, 4 / PI, 2 / PI, 8, 4),
-	MetricInfo("Hyperbola", "r / y^2", "0", "r / y^2", 0, 1, NONE, NONE, 1, 1, 0, 0),
+	MetricInfo("Hyperboloid", "r / y^2", "0", "r / y^2", 0, 1, NONE, NONE, 1, 1, 0, 0),
 	MetricInfo("Poincare Disk", "r / (1 - x^2 - y^2)", "0", "r / (1 - x^2 - y^2)", 1, 1, NONE, NONE, 1, 1, 0, 0),
 	MetricInfo("Schwarzschild", "-1 / (1 - r / x)", "0", "1 - r / x", 6, 0, NONE, NONE, 1, 1, 0, 0),
 	MetricInfo("Schwarzschild (Spatial)", "-1 / (1 - r / (x))", "0", "-x^2", 3, 0, NONE, CYCLIC, 1, 4 / PI, 0, 8),
