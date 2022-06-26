@@ -51,7 +51,7 @@ double MOVE_DISTANCE = 0.1;
 double ROTATION_ANGLE = 0.05;
 int input[2] = { 0, 0 };
 int inputRotation = 0;
-double initialPosition[2] = { 1.0, 1.0 };
+//double initialPosition[2] = { 2.0, 0.0 };
 double position[2];
 double basis[4]; // basis[a, b] = basis[2 * a + b];
 double rotation = 0;
@@ -295,8 +295,10 @@ void framebufferSizeCallback(GLFWwindow* window, int width, int height)
 
 void initializePositionBasis()
 {
-	position[0] = initialPosition[0];
-	position[1] = initialPosition[1];
+	position[0] = metricInfos[METRIC_FUNCTION_INDEX].initialPosition[0];
+	position[1] = metricInfos[METRIC_FUNCTION_INDEX].initialPosition[1];
+	//position[0] = initialPosition[0];
+	//position[1] = initialPosition[1];
 	initializeBasis(position, basis, METRIC_FUNCTION_INDEX);
 	//printArray(basis, 4, "basis");
 }
