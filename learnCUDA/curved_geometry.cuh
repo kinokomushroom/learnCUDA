@@ -102,6 +102,7 @@ __device__ __host__ void poincareMetric(double* metric, double x, double y) // h
 
 __device__ __host__ void schwarzschildMetric(double* metric, double x, double y) // https://en.wikipedia.org/wiki/Metric_tensor
 {
+	// (x, y) = (r, t)
 	double schwarzschildRadius = 4.0; // x = schwarzschildRadius is event horizon, and x = 0 is singularity
 
 	// xx component (space)
@@ -116,6 +117,7 @@ __device__ __host__ void schwarzschildMetric(double* metric, double x, double y)
 
 __device__ __host__ void schwarzschildSpatialMetric(double* metric, double x, double y)
 {
+	// (x, y) = (r, theta)
 	double schwarzschildRadius = 2.0; // x = 0 is event horizon, and x = -schwarzSchildRadius is singularity
 
 	// xx component (space)
@@ -139,6 +141,41 @@ __device__ __host__ void wormholeMetric(double* metric, double x, double y) // h
 	metric[2] = metric[1];
 	// yy component
 	metric[3] = x * x + radius * radius;
+}
+
+__device__ __host__ void kerrMetric(double* metric, double x, double y) // https://en.wikipedia.org/wiki/Kerr_metric
+{
+	// (x, y) = (phi, t) , theta = 2 / pi
+	double r = 3.0;
+	double schwarzschildRadius = 2.0;
+	double angularDivMass = 0.8;
+	double sigma = r * r;
+	//double delta = x * x - schwarzschildRadius * x + angularDivMass * angularDivMass;
+	// xx component
+	metric[0] = r * r + angularDivMass * angularDivMass * (1 + schwarzschildRadius * r / sigma);
+	// xy component
+	metric[1] = -2 * schwarzschildRadius * r * angularDivMass / sigma;
+	// yx component
+	metric[2] = metric[1];
+	// yy component
+	metric[3] = -1 + schwarzschildRadius * r / sigma;
+}
+
+__device__ __host__ void kerrSpatialMetric(double* metric, double x, double y)
+{
+	// (x, y) = (r, phi) , theta = pi / 2
+	double schwarzschildRadius = 2.0;
+	double angularDivMass = 0.5;
+	double sigma = x * x;
+	double delta = x * x - schwarzschildRadius * x + angularDivMass * angularDivMass;
+	// xx component
+	metric[0] = sigma / delta;
+	// xy component
+	metric[1] = 0.0;
+	// yx component
+	metric[2] = metric[1];
+	// yy component
+	metric[3] = (x * x + angularDivMass * angularDivMass * (1 + schwarzschildRadius * x));
 }
 // ---------------- metrics ----------------
 
@@ -177,7 +214,7 @@ __device__ __host__ double convertCoords(double value, int mode, double scale, d
 }
 
 typedef void(*metricFunction_t)(double* metric, double x, double y);
-const int METRIC_FUNCTION_COUNT = 9;
+const int METRIC_FUNCTION_COUNT = 11;
 __device__ const metricFunction_t metricFunctions[] =
 {
 	euclideanMetric,
@@ -189,6 +226,8 @@ __device__ const metricFunction_t metricFunctions[] =
 	schwarzschildMetric,
 	schwarzschildSpatialMetric,
 	wormholeMetric,
+	kerrMetric,
+	kerrSpatialMetric,
 };
 
 struct MetricInfo
@@ -222,9 +261,11 @@ const MetricInfo metricInfos[] =
 	MetricInfo("Torus", "(R + r * cos(y))^2", "0", "r^2", 0, 0, CYCLIC, CYCLIC, 4 / PI, 2 / PI, 8, 4),
 	MetricInfo("Hyperboloid", "r / y^2", "0", "r / y^2", 0, 1, NONE, NONE, 1, 1, 0, 0),
 	MetricInfo("Poincare Disk", "r / (1 - x^2 - y^2)", "0", "r / (1 - x^2 - y^2)", 1, 1, NONE, NONE, 1, 1, 0, 0),
-	MetricInfo("Schwarzschild", "-1 / (1 - r / x)", "0", "1 - r / x", 6, 0, NONE, NONE, 1, 1, 0, 0),
-	MetricInfo("Schwarzschild (Spatial)", "-1 / (1 - r / (x))", "0", "-x^2", 3, 0, NONE, CYCLIC, 1, 4 / PI, 0, 8),
+	MetricInfo("Schwarzschild", "-1 / (1 - R / x)", "0", "1 - R / x", 6, 0, NONE, NONE, 1, 1, 0, 0),
+	MetricInfo("Schwarzschild (Spatial)", "-1 / (1 - R / x)", "0", "-x^2", 3, 0, NONE, CYCLIC, 1, 4 / PI, 0, 8),
 	MetricInfo("Wormhole", "1", "0", "x^2 + r^2", 2, 0, NONE, CYCLIC, 1, 4 / PI, 0, 8),
+	MetricInfo("Kerr", "r^2 + a^2 * (1 + R / r)", "2 * a * R / r", "1 - R / r", 0, 0, CYCLIC, NONE, 4 / PI, 1, 8, 0),
+	MetricInfo("Kerr (Spatial)", "x^2 / (x^2 - R * x + a^2)", "0", "x^2 + a^2 * (1 + R / x)", 3, 0, NONE, CYCLIC, 1, 4 / PI, 0, 8),
 };
 
 
